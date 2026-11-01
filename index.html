@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Film Roll</title>
+<style>
+:root{--bg:#141311;--panel:#1d1b18;--line:#2f2c27;--tx:#ece6da;--dim:#8d867a;--acc:#e3a63b;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#141311}}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 "Noto Sans Thai","Helvetica Neue",Arial,sans-serif}
+.app{max-width:480px;margin:0 auto;padding:14px}
+.top{display:flex;justify-content:space-between;align-items:baseline;color:var(--dim);font-size:13px;margin-bottom:10px}
+.top b{color:var(--tx);font-size:15px}
+.card{display:flex;gap:14px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.box{flex:none;width:96px;height:128px;border-radius:4px;padding:8px 7px;display:flex;flex-direction:column;justify-content:space-between;color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.08) inset;font-family:Georgia,serif}
+.box small{font-size:9px;letter-spacing:.04em;opacity:.9}
+.box .n{font-size:30px;font-weight:700;line-height:1}
+.box .s{font-size:9px;background:rgba(255,255,255,.9);color:#222;padding:1px 3px;align-self:flex-start;border-radius:2px;font-family:Arial,sans-serif}
+.meta{flex:1;min-width:0}
+.meta h2{margin:0;font-size:22px}
+.meta p{margin:2px 0 10px;color:var(--dim);font-size:13px}
+.row{display:flex;justify-content:space-between;width:100%;background:none;border:0;border-top:1px solid var(--line);color:var(--tx);padding:7px 0;font:inherit;text-align:left}
+.row span:first-child{color:var(--dim)}
+.row:disabled{opacity:.5}
+.strip{display:flex;gap:8px;overflow-x:auto;padding:12px 2px;margin:4px 0}
+.mini{flex:none;width:44px;height:58px;border-radius:3px;border:2px solid transparent;color:#fff;font:700 14px Georgia,serif;display:grid;place-items:center}
+.mini[aria-pressed=true]{border-color:var(--acc);outline:2px solid var(--acc);outline-offset:2px}
+.mini:disabled{opacity:.35}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{background:var(--acc);color:#1b1407;border:0;border-radius:8px;padding:13px;font:600 15px inherit;font-family:inherit;text-align:center;cursor:pointer;display:block}
+.btn.alt{background:var(--panel);color:var(--tx);border:1px solid var(--line)}
+.btn.full{grid-column:1/-1}
+.btn:focus-visible,.row:focus-visible,.mini:focus-visible{outline:2px solid #fff;outline-offset:2px}
+input[type=file]{display:none}
+.frames{display:flex;flex-wrap:wrap;gap:4px;margin:12px 0}
+.f{width:20px;height:14px;border-radius:2px;background:var(--line)}.f.on{background:var(--acc)}
+.hint{color:var(--dim);font-size:12px;margin:8px 0}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:12px 0}
+.grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:3px;display:block}
+.view{position:fixed;inset:0;background:rgba(0,0,0,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;z-index:5}
+.view img{max-width:100%;max-height:75vh;border-radius:4px}
+.busy{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.6);z-index:6}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script>
+const STOCKS=[
+{n:'Velvia 50',b:'Fujifilm',t:'Slide · ISO 50',no:'50',sat:1.45,con:1.25,tint:[1.02,1,.98],grain:.12,bw:0,c:'#2f8a3c'},
+{n:'Portra 400',b:'Kodak',t:'Color negative · ISO 400',no:'400',sat:.9,con:.95,tint:[1.05,1.01,.96],grain:.3,bw:0,c:'#d89a3b'},
+{n:'Gold 200',b:'Kodak',t:'Color negative · ISO 200',no:'200',sat:1.1,con:1.05,tint:[1.09,1.02,.9],grain:.3,bw:0,c:'#e1ae1c'},
+{n:'Ektar 100',b:'Kodak',t:'Color negative · ISO 100',no:'100',sat:1.35,con:1.15,tint:[1.03,1,.97],grain:.1,bw:0,c:'#c23a2e'},
+{n:'Tri-X 400',b:'Kodak',t:'Black & white · ISO 400',no:'400',sat:0,con:1.3,tint:[1,1,1],grain:.55,bw:1,c:'#4a4a4a'},
+{n:'800T',b:'CineStill',t:'Tungsten · ISO 800',no:'800',sat:1.05,con:1.1,tint:[.92,1,1.12],grain:.45,bw:0,c:'#356aa3'}];
+const OPT={dev:['Pull -1','Normal','Push +1','Push +2','Push +3'],paper:['Glossy','Matte'],light:['Sunny','Cloudy','Tungsten'],fx:['Subtle','Normal','Strong'],len:[12,24,36]};
+const LBL={dev:'Development',paper:'Paper',light:'Light',fx:'Effect',len:'Frames per roll'};
+const S={roll:1,stock:0,dev:1,paper:0,light:0,fx:0,len:0,shots:[],mode:'shoot',open:null,busy:false};
+const $=s=>document.querySelector(s);
+const locked=()=>S.shots.length>0;
+function render(){
+ const k=STOCKS[S.stock],len=OPT.len[S.len],n=S.shots.length;
+ const app=$('#app');
+ if(S.mode==='dev'){
+  app.innerHTML=`<div class="top"><b>Roll ${S.roll} · ${k.b} ${k.n}</b><span>${n} frames</span></div>
+  <div class="grid">${S.shots.map((u,i)=>`<img src="${u}" alt="Frame ${i+1}" data-i="${i}">`).join('')}</div>
+  <div class="acts"><button class="btn full" id="newroll">Load new roll</button></div>`;
+  $('#newroll').onclick=()=>{S.roll++;S.shots=[];S.mode='shoot';render()};
+  app.querySelectorAll('.grid img').forEach(im=>im.onclick=()=>{S.open=+im.dataset.i;render()});
+ }else{
+  const row=(key,val)=>`<button class="row" data-k="${key}" ${(['dev','len'].includes(key)||key==='stock')&&locked()?'disabled':''}><span>${LBL[key]}</span><span>${val}</span></button>`;
+  app.innerHTML=`<div class="top"><b>Roll ${S.roll}</b><span>frame ${Math.min(n+1,len)} of ${len}</span></div>
+  <div class="card"><div class="box" style="background:${k.c}"><small>${k.b.toUpperCase()}</small><span class="n">${k.no}</span><span class="s">${len} exp</span></div>
+  <div class="meta"><h2>${k.n}</h2><p>${k.b} · ${k.t}</p>
+  ${row('dev',OPT.dev[S.dev])}${row('paper',OPT.paper[S.paper])}${row('light',OPT.light[S.light])}${row('fx',OPT.fx[S.fx])}${row('len',len)}</div></div>
+  <div class="strip" role="group" aria-label="Film stock">${STOCKS.map((s,i)=>`<button class="mini" style="background:${s.c}" aria-pressed="${i===S.stock}" aria-label="${s.b} ${s.n}" data-s="${i}" ${locked()?'disabled':''}>${s.no}</button>`).join('')}</div>
+  <div class="frames">${Array.from({length:len},(_,i)=>`<i class="f ${i<n?'on':''}"></i>`).join('')}</div>
+  <div class="acts">
+   <button class="btn full" id="lv0">Live view</button>
+   <label class="btn alt">Take photo<input type="file" accept="image/*" capture="environment" id="cam"></label>
+   <label class="btn alt">Pick from gallery<input type="file" accept="image/*" id="gal"></label>
+   <button class="btn alt full" id="dv" ${n?'':'disabled'}>Develop roll now (${n} frames)</button></div>
+  <p class="hint">${locked()?'Film stock, development and roll length are locked until the roll is developed.':'Tap a setting to change it. Pick the film before the first frame.'}</p>`;
+  app.querySelectorAll('.row').forEach(b=>b.onclick=()=>{const key=b.dataset.k;S[key]=(S[key]+1)%OPT[key].length;render()});
+  app.querySelectorAll('.mini').forEach(b=>b.onclick=()=>{S.stock=+b.dataset.s;render()});
+  const take=e=>{const f=e.target.files[0];if(f)shoot(f)};
+  $('#cam').onchange=take;$('#gal').onchange=take;
+  $('#dv').onclick=()=>{S.mode='dev';render()};
+  $('#lv0').onclick=openLive;
+ }
+ if(S.open!==null){
+  const v=document.createElement('div');v.className='view';
+  v.innerHTML=`<img src="${S.shots[S.open]}" alt="Frame ${S.open+1}"><div class="acts"><p class="hint">Press and hold the photo to save it.</p><button class="btn alt" id="x">Close</button></div>`;
+  document.body.appendChild(v);v.querySelector('#x').onclick=()=>{S.open=null;v.remove()};
+ }
+}
+function note(t){const d=document.createElement('div');d.className='busy';d.style.padding='24px';d.style.textAlign='center';d.textContent=t+' (tap to close)';d.onclick=()=>d.remove();document.body.appendChild(d)}
+async function openLive(){
+ let st;
+ try{st=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false})}
+ catch(e){note('Live view is not available here ('+(e.name||e)+'). Use Take photo or Pick from gallery instead.');return}
+ const v=document.createElement('video');v.srcObject=st;v.muted=true;v.setAttribute('playsinline','');
+ try{await v.play()}catch(e){}
+ const o=document.createElement('div');o.className='view';
+ o.innerHTML='<canvas style="max-width:100%;max-height:68vh;border-radius:4px;transition:opacity .15s"></canvas><div class="hint"></div><div class="acts"><button class="btn" id="sh">Shoot</button><button class="btn alt" id="cl">Close</button></div>';
+ document.body.appendChild(o);
+ const cv=o.querySelector('canvas'),cx=cv.getContext('2d',{willReadFrequently:true}),h=o.querySelector('.hint');
+ let run=true;
+ const label=()=>{h.textContent=STOCKS[S.stock].b+' '+STOCKS[S.stock].n+' · frame '+Math.min(S.shots.length+1,OPT.len[S.len])+' of '+OPT.len[S.len]};
+ label();
+ const loop=()=>{
+  if(!run)return;
+  const vw=v.videoWidth,vh=v.videoHeight;
+  if(vw){const sc=360/Math.max(vw,vh);cv.width=Math.round(vw*sc);cv.height=Math.round(vh*sc);cx.drawImage(v,0,0,cv.width,cv.height);const d=cx.getImageData(0,0,cv.width,cv.height);film(d,STOCKS[S.stock]);cx.putImageData(d,0,0)}
+  requestAnimationFrame(loop)};
+ loop();
+ const stop=()=>{run=false;st.getTracks().forEach(t=>t.stop());o.remove()};
+ o.querySelector('#cl').onclick=stop;
+ o.querySelector('#sh').onclick=()=>{
+  const vw=v.videoWidth,vh=v.videoHeight;if(!vw)return;
+  const sc=Math.min(1,1400/Math.max(vw,vh));
+  const c=document.createElement('canvas');c.width=Math.round(vw*sc);c.height=Math.round(vh*sc);
+  const x=c.getContext('2d');x.drawImage(v,0,0,c.width,c.height);
+  const d=x.getImageData(0,0,c.width,c.height);film(d,STOCKS[S.stock]);x.putImageData(d,0,0);
+  S.shots.push(c.toDataURL('image/jpeg',.9));
+  cv.style.opacity=.15;setTimeout(()=>cv.style.opacity=1,120);
+  if(S.shots.length>=OPT.len[S.len]){S.mode='dev';stop()}else label();
+  render();
+ };
+}
+async function loadImg(file){
+ try{return await createImageBitmap(file)}catch(e){}
+ const u=URL.createObjectURL(file),im=new Image();
+ await new Promise((ok,no)=>{im.onload=ok;im.onerror=()=>no(new Error('unsupported image'));im.src=u});
+ return im;
+}
+async function shoot(file){
+ const busy=document.createElement('div');busy.className='busy';busy.textContent='Exposing…';document.body.appendChild(busy);
+ try{
+  const bm=await loadImg(file),bw=bm.naturalWidth||bm.width,bh=bm.naturalHeight||bm.height;
+  const sc=Math.min(1,1400/Math.max(bw,bh));
+  const c=document.createElement('canvas');c.width=Math.round(bw*sc);c.height=Math.round(bh*sc);
+  const x=c.getContext('2d');x.drawImage(bm,0,0,c.width,c.height);
+  const d=x.getImageData(0,0,c.width,c.height);film(d,STOCKS[S.stock]);x.putImageData(d,0,0);
+  S.shots.push(c.toDataURL('image/jpeg',.9));
+  if(S.shots.length>=OPT.len[S.len])S.mode='dev';
+ }catch(e){busy.textContent='Could not process this photo ('+(e.message||e)+'). Tap to close.';busy.onclick=()=>busy.remove();render();return}
+ busy.remove();render();
+}
+function film(img,k){
+ const p=img.data,W=img.width,H=img.height;
+ const push=S.dev-1,ex=Math.pow(2,push*.35);
+ const con=k.con+.07*push,gr=(k.grain+.07*push)*[.6,1,1.6][S.fx];
+ const vg=[.15,.3,.5][S.fx],lt=[[1.04,1,.95],[.97,1,1.05],[1.14,.98,.8]][S.light];
+ const lift=S.paper?22:0,gl=S.paper?.92:1;
+ const cx=W/2,cy=H/2,md=Math.hypot(cx,cy);
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  const i=(y*W+x)*4;
+  let r=p[i]*ex*k.tint[0]*lt[0],g=p[i+1]*ex*k.tint[1]*lt[1],b=p[i+2]*ex*k.tint[2]*lt[2];
+  const L=.299*r+.587*g+.114*b;
+  if(k.bw){r=g=b=L}else{r=L+(r-L)*k.sat;g=L+(g-L)*k.sat;b=L+(b-L)*k.sat}
+  r=(r-128)*con+128;g=(g-128)*con+128;b=(b-128)*con+128;
+  const dd=Math.hypot(x-cx,y-cy)/md,v=1-vg*dd*dd;
+  const n=(Math.random()-.5)*gr*70;
+  r=(r*v+n)*gl+lift;g=(g*v+n)*gl+lift;b=(b*v+n)*gl+lift;
+  p[i]=r<0?0:r>255?255:r;p[i+1]=g<0?0:g>255?255:g;p[i+2]=b<0?0:b>255?255:b;
+ }
+}
+render();
+</script>
+</body>
+</html>
